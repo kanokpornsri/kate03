@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>AR Cartoon Aquarium - Hiro Marker</title>
+
+  <!-- A-Frame -->
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  <!-- AR.js -->
+  <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.5/aframe/build/aframe-ar.js"></script>
+
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      background: #000;
+    }
+
+    .info {
+      position: fixed;
+      left: 50%;
+      top: 14px;
+      transform: translateX(-50%);
+      width: calc(100% - 28px);
+      max-width: 560px;
+      background: rgba(0, 0, 0, 0.68);
+      color: #fff;
+      padding: 12px 14px;
+      border-radius: 14px;
+      z-index: 9999;
+      text-align: center;
+      line-height: 1.45;
+      box-sizing: border-box;
+    }
+
+    .info h2 {
+      margin: 0 0 6px 0;
+      font-size: 20px;
+      color: #8fe7ff;
+    }
+
+    .info p {
+      margin: 0;
+      font-size: 14px;
+    }
+
+    .badge {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(0, 170, 255, 0.25);
+      border: 1px solid rgba(143, 231, 255, 0.35);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="info">
+    <h2>🐠 AR อ่างเลี้ยงปลาการ์ตูน</h2>
+    <p>เมื่อกล้องพบ <b>Hiro Marker</b> จะปรากฏอ่างเลี้ยงปลาสวยงามแบบการ์ตูน พร้อมปลาหางนกยูงว่ายน้ำอย่างสนุกสนาน</p>
+    <div class="badge">ส่องกล้องไปที่ Hiro Marker เพื่อเริ่ม AR</div>
+  </div>
+
+  <script>
+    AFRAME.registerComponent('swim-fish', {
+      schema: {
+        radiusX: {type: 'number', default: 0.45},
+        radiusZ: {type: 'number', default: 0.22},
+        speed:   {type: 'number', default: 0.9},
+        centerX: {type: 'number', default: 0},
+        centerY: {type: 'number', default: 0.02},
+        centerZ: {type: 'number', default: 0},
+        phase:   {type: 'number', default: 0},
+        bobAmp:  {type: 'number', default: 0.08}
+      },
+
+      init: function () {
+        this.tail = this.el.querySelector('.tail');
+        this.finL = this.el.querySelector('.fin-left');
+        this.finR = this.el.querySelector('.fin-right');
+      },
+
+      tick: function (time) {
+        const t = time / 1000;
+        const d = this.data;
+        const a = t * d.speed + d.phase;
+
+        const x = d.centerX + Math.cos(a) * d.radiusX;
+        const z = d.centerZ + Math.sin(a * 1.12) * d.radiusZ;
+        const y = d.centerY + Math.sin(a * 2.0) * d.bobAmp;
+
+        this.el.object3D.position.set(x, y, z);
+
+        const dx = -Math.sin(a) * d.radiusX;
+        const dz =  Math.cos(a * 1.12) * d.radiusZ * 1.12;
+        const yaw = Math.atan2(dx, dz) * 180 / Math.PI;
+
+        this.el.object3D.rotation.set(0, THREE.MathUtils.degToRad(yaw), 0);
+
+        const sway = Math.sin(t * 10 + d.phase) * 25;
+        if (this.tail) {
+          this.tail.object3D.rotation.y = THREE.MathUtils.degToRad(sway);
+        }
+        if (this.finL) {
+          this.finL.object3D.rotation.z = THREE.MathUtils.degToRad(20 + Math.sin(t * 8 + d.phase) * 10);
+        }
+        if (this.finR) {
+          this.finR.object3D.rotation.z = THREE.MathUtils.degToRad(-20 - Math.sin(t * 8 + d.phase) * 10);
+        }
+      }
+    });
+
+    AFRAME.registerComponent('bubble-rise', {
+      schema: {
+        minY: {type: 'number', default: -0.30},
+        maxY: {type: 'number', default: 0.44},
+        speed: {type: 'number', default: 0.18},
+        drift: {type: 'number', default: 0.02},
+        phase: {type: 'number', default: 0}
+      },
+
+      init: function () {
+        this.baseX = this.el.object3D.position.x;
+        this.baseZ = this.el.object3D.position.z;
+      },
+
+      tick: function (time, delta) {
+        const d = this.data;
+        const p = this.el.object3D.position;
+        const dt = delta / 1000;
+
+        p.y += d.speed * dt;
+        p.x = this.baseX + Math.sin(time / 500 + d.phase) * d.drift;
+        p.z = this.baseZ + Math.cos(time / 650 + d.phase) * d.drift * 0.6;
+
+        if (p.y > d.maxY) {
+          p.y = d.minY;
+        }
+      }
+    });
+
+    AFRAME.registerComponent('gentle-sway', {
+      schema: {
+        speed: {type: 'number', default: 1},
+        amount: {type: 'number', default: 8},
+        axis: {type: 'string', default: 'z'},
+        phase: {type: 'number', default: 0}
+      },
+      tick: function (time) {
+        const t = time / 1000;
+        const angle = Math.sin(t * this.data.speed + this.data.phase) * this.data.amount;
+        if (this.data.axis === 'z') this.el.object3D.rotation.z = THREE.MathUtils.degToRad(angle);
+        if (this.data.axis === 'x') this.el.object3D.rotation.x = THREE.MathUtils.degToRad(angle);
+        if (this.data.axis === 'y') this.el.object3D.rotation.y = THREE.MathUtils.degToRad(angle);
+      }
+    });
+  </script>
+
+  <a-scene
+    embedded
+    vr-mode-ui="enabled: false"
+    renderer="antialias: true; logarithmicDepthBuffer: true; alpha: true;"
+    arjs="sourceType: webcam; debugUIEnabled: false; trackingMethod: best;"
+  >
+    <a-assets></a-assets>
+
+    <a-marker preset="hiro">
+      <a-entity id="aquariumRoot" position="0 0.2 0" scale="0.9 0.9 0.9">
+
+        <!-- Base stand -->
+        <a-box position="0 -0.58 0" width="1.55" height="0.12" depth="1.05" color="#6e4c2d"></a-box>
+        <a-box position="0 -0.49 0" width="1.48" height="0.05" depth="0.98" color="#9a6c3c"></a-box>
+
+        <!-- Aquarium frame -->
+        <a-box position="0 0 0" width="1.42" height="0.92" depth="0.92" color="#e6fbff" opacity="0.18" transparent="true"></a-box>
+        <a-box position="0 0 0.47" width="1.48" height="0.98" depth="0.04" color="#75bcd9"></a-box>
+        <a-box position="0 0 -0.47" width="1.48" height="0.98" depth="0.04" color="#75bcd9"></a-box>
+        <a-box position="-0.72 0 0" width="0.04" height="0.98" depth="0.96" color="#75bcd9"></a-box>
+        <a-box position="0.72 0 0" width="0.04" height="0.98" depth="0.96" color="#75bcd9"></a-box>
+        <a-box position="0 0.49 0" width="1.48" height="0.04" depth="0.96" color="#75bcd9"></a-box>
+        <a-box position="0 -0.49 0" width="1.48" height="0.04" depth="0.96" color="#75bcd9"></a-box>
+
+        <!-- Water -->
+        <a-box position="0 -0.02 0" width="1.34" height="0.78" depth="0.82"
+               color="#71d7ff" opacity="0.42" transparent="true"></a-box>
+        <a-box position="0 0.36 0" width="1.32" height="0.02" depth="0.80"
+               color="#baf2ff" opacity="0.85" transparent="true"></a-box>
+
+        <!-- Sand / gravel -->
+        <a-box position="0 -0.36 0" width="1.30" height="0.14" depth="0.78" color="#f0d39f"></a-box>
+
+        <!-- Decorative stones -->
+        <a-sphere position="-0.38 -0.26 0.18" radius="0.08" color="#c6b0a1"></a-sphere>
+        <a-sphere position="-0.28 -0.29 0.10" radius="0.06" color="#b59c8d"></a-sphere>
+        <a-sphere position="0.33 -0.27 -0.08" radius="0.07" color="#c8b7aa"></a-sphere>
+        <a-sphere position="0.22 -0.30 0.04" radius="0.05" color="#af9789"></a-sphere>
+
+        <!-- Castle / decoration -->
+        <a-cylinder position="0 -0.24 -0.15" radius="0.10" height="0.18" color="#d9b991"></a-cylinder>
+        <a-cone position="0 0.00 -0.15" radius-bottom="0.14" radius-top="0.01" height="0.18" color="#c77c54"></a-cone>
+        <a-box position="0 -0.23 -0.04" width="0.18" height="0.10" depth="0.04" color="#9b6b4f"></a-box>
+        <a-torus position="0 -0.23 -0.02" radius="0.05" radius-tubular="0.012" rotation="90 0 0" color="#6f4e37"></a-torus>
+
+        <!-- Plants -->
+        <a-entity position="-0.48 -0.31 -0.12" gentle-sway="speed:1.4; amount:8; axis:z; phase:0.5">
+          <a-cylinder position="0 0.12 0" radius="0.018" height="0.25" color="#2c9f55"></a-cylinder>
+          <a-sphere position="-0.05 0.18 0" radius="0.05" color="#49c26d"></a-sphere>
+          <a-sphere position="0.05 0.26 0" radius="0.06" color="#54d377"></a-sphere>
+          <a-sphere position="-0.02 0.33 0" radius="0.055" color="#46b869"></a-sphere>
+        </a-entity>
+
+        <a-entity position="0.46 -0.31 0.10" gentle-sway="speed:1.1; amount:7; axis:z; phase:1.8">
+          <a-cylinder position="0 0.16 0" radius="0.018" height="0.32" color="#27864a"></a-cylinder>
+          <a-sphere position="-0.05 0.22 0" radius="0.05" color="#3faf62"></a-sphere>
+          <a-sphere position="0.04 0.31 0" radius="0.06" color="#53ca78"></a-sphere>
+          <a-sphere position="-0.02 0.40 0" radius="0.055" color="#63df89"></a-sphere>
+        </a-entity>
+
+        <a-entity position="-0.10 -0.31 0.22" gentle-sway="speed:1.7; amount:6; axis:z; phase:2.4">
+          <a-cylinder position="0 0.14 0" radius="0.016" height="0.28" color="#2f8a57"></a-cylinder>
+          <a-sphere position="-0.03 0.20 0" radius="0.04" color="#58cb78"></a-sphere>
+          <a-sphere position="0.03 0.28 0" radius="0.05" color="#4dbc6c"></a-sphere>
+          <a-sphere position="-0.01 0.36 0" radius="0.045" color="#76e195"></a-sphere>
+        </a-entity>
+
+        <!-- Bubbles -->
+        <a-sphere position="-0.40 -0.26 0.20" radius="0.025" color="#e8fbff" opacity="0.65" transparent="true" bubble-rise="speed:0.16; phase:0.2"></a-sphere>
+        <a-sphere position="-0.42 -0.08 0.18" radius="0.018" color="#e8fbff" opacity="0.55" transparent="true" bubble-rise="speed:0.21; phase:1.0"></a-sphere>
+        <a-sphere position="-0.38 0.04 0.22" radius="0.014" color="#e8fbff" opacity="0.45" transparent="true" bubble-rise="speed:0.18; phase:2.0"></a-sphere>
+
+        <a-sphere position="0.42 -0.24 -0.10" radius="0.022" color="#e8fbff" opacity="0.64" transparent="true" bubble-rise="speed:0.17; phase:0.7"></a-sphere>
+        <a-sphere position="0.39 -0.02 -0.08" radius="0.016" color="#e8fbff" opacity="0.52" transparent="true" bubble-rise="speed:0.23; phase:1.7"></a-sphere>
+        <a-sphere position="0.44 0.12 -0.11" radius="0.012" color="#e8fbff" opacity="0.43" transparent="true" bubble-rise="speed:0.20; phase:2.5"></a-sphere>
+
+        <!-- Fish 1 -->
+        <a-entity swim-fish="radiusX:0.45; radiusZ:0.20; speed:0.75; centerY:0.06; phase:0.0">
+          <a-sphere position="0 0 0" radius="0.09" color="#ffb04a"></a-sphere>
+          <a-cone class="tail" position="0 0 -0.13" radius-bottom="0.10" radius-top="0.01" height="0.16" rotation="0 0 90" color="#ff5a8d"></a-cone>
+          <a-sphere position="0.07 0.02 0.04" radius="0.016" color="#ffffff"></a-sphere>
+          <a-sphere position="0.078 0.02 0.05" radius="0.007" color="#111111"></a-sphere>
+          <a-cone class="fin-left" position="-0.01 0.02 0.07" radius-bottom="0.04" radius-top="0.005" height="0.09" rotation="0 0 30" color="#ff7bab"></a-cone>
+          <a-cone class="fin-right" position="-0.01 -0.02 -0.07" radius-bottom="0.04" radius-top="0.005" height="0.09" rotation="180 0 30" color="#ff7bab"></a-cone>
+        </a-entity>
+
+        <!-- Fish 2 -->
+        <a-entity swim-fish="radiusX:0.34; radiusZ:0.26; speed:1.05; centerY:-0.03; phase:1.8">
+          <a-sphere position="0 0 0" radius="0.08" color="#6fd7ff"></a-sphere>
+          <a-cone class="tail" position="0 0 -0.12" radius-bottom="0.10" radius-top="0.01" height="0.16" rotation="0 0 90" color="#ffd34f"></a-cone>
+          <a-sphere position="0.06 0.02 0.04" radius="0.014" color="#ffffff"></a-sphere>
+          <a-sphere position="0.068 0.02 0.05" radius="0.006" color="#111111"></a-sphere>
+          <a-cone class="fin-left" position="-0.01 0.02 0.06" radius-bottom="0.035" radius-top="0.005" height="0.08" rotation="0 0 30" color="#fff08f"></a-cone>
+          <a-cone class="fin-right" position="-0.01 -0.02 -0.06" radius-bottom="0.035" radius-top="0.005" height="0.08" rotation="180 0 30" color="#fff08f"></a-cone>
+        </a-entity>
+
+        <!-- Fish 3 -->
+        <a-entity swim-fish="radiusX:0.24; radiusZ:0.14; speed:1.4; centerY:0.12; phase:3.0">
+          <a-sphere position="0 0 0" radius="0.07" color="#ff7f72"></a-sphere>
+          <a-cone class="tail" position="0 0 -0.11" radius-bottom="0.08" radius-top="0.01" height="0.14" rotation="0 0 90" color="#a96bff"></a-cone>
+          <a-sphere position="0.055 0.018 0.04" radius="0.013" color="#ffffff"></a-sphere>
+          <a-sphere position="0.061 0.018 0.05" radius="0.005" color="#111111"></a-sphere>
+          <a-cone class="fin-left" position="-0.01 0.02 0.05" radius-bottom="0.03" radius-top="0.005" height="0.07" rotation="0 0 30" color="#cba8ff"></a-cone>
+          <a-cone class="fin-right" position="-0.01 -0.02 -0.05" radius-bottom="0.03" radius-top="0.005" height="0.07" rotation="180 0 30" color="#cba8ff"></a-cone>
+        </a-entity>
+
+        <!-- Fish 4 -->
+        <a-entity swim-fish="radiusX:0.28; radiusZ:0.10; speed:0.95; centerY:-0.11; phase:4.3">
+          <a-sphere position="0 0 0" radius="0.065" color="#9af06b"></a-sphere>
+          <a-cone class="tail" position="0 0 -0.10" radius-bottom="0.075" radius-top="0.01" height="0.13" rotation="0 0 90" color="#42d6b2"></a-cone>
+          <a-sphere position="0.05 0.016 0.04" radius="0.012" color="#ffffff"></a-sphere>
+          <a-sphere position="0.056 0.016 0.05" radius="0.005" color="#111111"></a-sphere>
+          <a-cone class="fin-left" position="-0.01 0.02 0.045" radius-bottom="0.028" radius-top="0.005" height="0.065" rotation="0 0 30" color="#74f7d6"></a-cone>
+          <a-cone class="fin-right" position="-0.01 -0.02 -0.045" radius-bottom="0.028" radius-top="0.005" height="0.065" rotation="180 0 30" color="#74f7d6"></a-cone>
+        </a-entity>
+
+        <!-- Cute label -->
+        <a-plane position="0 0.73 0" width="1.05" height="0.18" color="#ffffff" opacity="0.92">
+          <a-text value="Cute Guppy Aquarium" align="center" color="#2b6d8d" width="2.8" position="0 0 0.01"></a-text>
+        </a-plane>
+
+      </a-entity>
+    </a-marker>
+
+    <a-entity camera></a-entity>
+  </a-scene>
+</body>
+</html>
